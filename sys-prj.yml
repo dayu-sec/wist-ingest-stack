@@ -3,10 +3,12 @@ test_envs:
   deps: []
 
 # `gops sys package` 排除（默认模式与 --full 都生效）
+# `configs/` = 现场渲染出的配置（可重建、每部署一份）；`.wist/` = 密钥（绝不进包）。
 pkg_exclude:
   - data-plane-run
   - identity
   - .wist
+  - configs
   - .env
   - packages
 
@@ -14,6 +16,7 @@ pkg_exclude:
 protect:
   - data-plane-run
   - identity
+  - configs
   - .env
   - packages
   - values
@@ -24,8 +27,15 @@ protect:
 contract:
   - identity
 
-# 备份取 backup ∪ contract；identity 已由 contract 覆盖，这里不要重复列。
+# 备份取 backup 表。
+#   `configs/` —— 渲染出的 ctrl 配置（模板在 sys/configs/**/*.tpl，丢了可重渲）
+#   `.wist/`   —— 密钥文件（admin token 等）。**必须备**：配置里只有 `${SEC_*}` 占位，
+#                 丢了它就等于丢了 token，还原时会换成另一份。
+# `identity/` 不在这里：它走 `contract`（`gops prj contract export`），两者是两条通路。
+# 注意：同一路径既在 contract 又在 backup 会触发 `contract.overlap` 诊断错误。
 backup:
+  - configs
+  - .wist
   - data-plane-run
 
 perms:
@@ -35,5 +45,5 @@ perms:
       gid: 999
 
 secrets:
-  file: .wist/sec_value.yml
+  file: .wist/sec-value.yml
   mode: "0640"

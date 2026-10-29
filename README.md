@@ -16,11 +16,13 @@ sys/
   docker-compose.yml     ingest + web
   setting/vars.yml       产品默认变量
   configs/ingest/        warp-parse 种子（conf/connectors/topology/models）
-  configs/ctrl/ctrl.toml ctrl 的站点配置模板
-  scripts/init-ingest.sh 以部署账号预建运行根与子挂载点
+  configs/ctrl/ctrl.toml.tpl  ctrl 站点配置模板（渲染到栈根 configs/ctrl/ctrl.toml）
+  scripts/init-ingest.sh 备料：运行根 + 种子 + 渲染 ctrl 配置
 values/value.yml         现场覆盖
 identity/ingest/         站点身份（server cert/key + client CA）—— 站点态，不进包
+configs/ctrl/            ctrl 渲染后的站点配置（现场态，不入库、不进包）
 data-plane-run/work/     容器 /data 的宿主侧工作根 —— 站点态
+.wist/sec-value.yml      密钥（`ingest_ctrl_admin_token` → `${SEC_INGEST_CTRL_ADMIN_TOKEN}`，0640）
 ```
 
 ## 首次部署（Linux）
@@ -51,11 +53,16 @@ gops sys perms --apply
 # 4) 起数据面 + 管理台
 gops run start
 
-# 5) ctrl（宿主）
-sudo install -m 0640 sys/configs/ctrl/ctrl.toml /etc/wist-ingest/ctrl.toml
-#   先把 ctrl.auth.admin_token（或 _hash）改成现场值；未配置会拒绝启动。
-wist-ingest-ctrl doctor
-wist-ingest-ctrl apply          # 渲染 + wproj check + 重启 ingest
+# 5) ctrl（宿主）：配置渲染 + 密钥
+#    init-ingest.sh 已把 sys/configs/ctrl/ctrl.toml.tpl 渲染到 configs/ctrl/ctrl.toml
+#    （只替换 ${INGEST_ROOT}，${SEC_*} 留给运行时）。token 在 .wist/sec-value.yml：
+#      ingest_ctrl_admin_token: <token>      ← 页面登录就粘这个值
+#    systemd 单元里指好两个环境变量即可：
+#      INGEST_CTRL_CONFIG=<栈根>/configs/ctrl/ctrl.toml
+#      INGEST_CTRL_SEC_FILE=<栈根>/.wist/sec-value.yml
+wist-ingest-ctrl --config configs/ctrl/ctrl.toml doctor
+wist-ingest-ctrl --config configs/ctrl/ctrl.toml apply   # 渲染 + wproj check + 重启 ingest
+wist-ingest-ctrl --config configs/ctrl/ctrl.toml serve   # 或交给 systemd
 ```
 
 ## 安全要点（都写进配置里了，改之前先读）

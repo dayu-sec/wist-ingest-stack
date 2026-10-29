@@ -43,6 +43,19 @@ copy_missing "${SEED}/topology" "${WORK}/topology"
 copy_missing "${SEED}/models" "${WORK}/models"
 note "seed copied (existing files kept)"
 
+# 5) ctrl 站点配置：模板 → 栈根 configs/ctrl/ctrl.toml（现场态）
+#    只渲染 ${INGEST_ROOT}；${SEC_*} 原样保留，由 ctrl 启动时从
+#    INGEST_CTRL_SEC_FILE（= .wist/sec-value.yml）解析 —— 配置落盘不含秘密。
+CTRL_TPL="${STACK_ROOT}/sys/configs/ctrl/ctrl.toml.tpl"
+CTRL_OUT="${STACK_ROOT}/configs/ctrl/ctrl.toml"
+if [ -f "${CTRL_TPL}" ]; then
+  mkdir -p "$(dirname "${CTRL_OUT}")"
+  sed "s#\${INGEST_ROOT}#${STACK_ROOT}#g" "${CTRL_TPL}" > "${CTRL_OUT}.tmp"
+  mv "${CTRL_OUT}.tmp" "${CTRL_OUT}"
+  chmod 0640 "${CTRL_OUT}" 2>/dev/null || true
+  note "ctrl config: ${CTRL_OUT}"
+fi
+
 # 3) 站点身份：三棵目录（数据面 / ctrl 管理面 / web）
 #    ingest/trust  -- 数据面服务端证书 + 网关客户端 CA
 #    ctrl/tls      -- ctrl 服务端证书 + web 客户端 CA（mTLS）

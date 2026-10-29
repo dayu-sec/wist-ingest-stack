@@ -15,3 +15,6 @@ identity/
 .DS_Store
 # 迁移（gops >= 1.4）：模块按目标模型分组
 sys/*/mods
+
+# 现场渲染出的配置（模板在 sys/configs/**/*.tpl）——含站点路径，不入库
+/configs/
