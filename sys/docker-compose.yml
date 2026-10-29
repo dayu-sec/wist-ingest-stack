@@ -45,13 +45,44 @@ services:
     # tmpfs:
     #   - /tmp
 
+  # 控制面：wist-ingest-ctrl（与 wist-center 同构：**在容器里跑**，宿主只暴露回环端口）。
+  # 它要 `docker exec` / `docker restart` 数据面容器，所以挂宿主 docker.sock；
+  # 读 socket 需要能访问 docker 组的身份，这里直接用容器内 root（socket 等价宿主 root，如实标记）。
+  ctrl:
+    container_name: wist-ingest-stack-ctrl
+    image: ${INGEST_SPC}/wist-ingest-ctrl:${INGEST_CTRL_TAG}
+    restart: unless-stopped
+    user: "0:0"
+    # 镜像 ENTRYPOINT=[wist-ingest-ctrl] CMD=[--help]，不写 command 会打印帮助后退出。
+    command: ["serve"]
+    environment:
+      - TZ=${TZ}
+      # 配置与密钥都在挂载点里（密钥真值不入配置、不进镜像）。
+      - INGEST_CTRL_CONFIG=/configs/ingest-ctrl.toml
+      - INGEST_CTRL_SEC_FILE=/sec/sec-value.yml
+    ports:
+      # 仅供宿主调试（curl / 命令行）；web 走 compose 网络直连 ctrl:19091。
+      - "127.0.0.1:19091:19091"
+    volumes:
+      # 现场渲染出的站点配置（来自 sys/configs/ingest-ctrl/，只补缺）
+      - ./configs/ingest-ctrl:/configs:ro
+      # 密钥文件（`ingest_ctrl_admin_token` 等），只读
+      - ./.wist:/sec:ro
+      # 数据面运行根：ctrl 往这里渲染 connectors/ + topology/，与 ingest 的 /data 是同一份
+      - ./data-plane-run/work:/work
+      # 站点身份（证书指纹 / 到期检查；管理面 TLS 的 server 证书）
+      - ./identity:/identity:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - ingest
+
   web:
     container_name: wist-ingest-stack-web
     image: ${INGEST_SPC}/wist-ingest-web:${INGEST_WEB_TAG}
     restart: unless-stopped
-    # ctrl 跑在宿主，容器用这个名字访问它的管理面（只绑 127.0.0.1:19091）。
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # ctrl 在同一 compose 网络里，nginx 直接代理到 `ctrl:19091`（mTLS）。
     ports:
       - "${WEB_BIND_IP}:${WEB_PORT}:443"
     volumes:
@@ -59,3 +90,5 @@ services:
       - ./identity/web/tls:/etc/nginx/tls:ro
     security_opt:
       - no-new-privileges:true
+    depends_on:
+      - ctrl

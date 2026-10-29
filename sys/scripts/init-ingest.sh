@@ -43,17 +43,15 @@ copy_missing "${SEED}/topology" "${WORK}/topology"
 copy_missing "${SEED}/models" "${WORK}/models"
 note "seed copied (existing files kept)"
 
-# 5) ctrl 站点配置：模板 → 栈根 configs/ctrl/ctrl.toml（现场态）
-#    只渲染 ${INGEST_ROOT}；${SEC_*} 原样保留，由 ctrl 启动时从
-#    INGEST_CTRL_SEC_FILE（= .wist/sec-value.yml）解析 —— 配置落盘不含秘密。
-CTRL_TPL="${STACK_ROOT}/sys/configs/ctrl/ctrl.toml.tpl"
-CTRL_OUT="${STACK_ROOT}/configs/ctrl/ctrl.toml"
-if [ -f "${CTRL_TPL}" ]; then
-  mkdir -p "$(dirname "${CTRL_OUT}")"
-  sed "s#\${INGEST_ROOT}#${STACK_ROOT}#g" "${CTRL_TPL}" > "${CTRL_OUT}.tmp"
-  mv "${CTRL_OUT}.tmp" "${CTRL_OUT}"
-  chmod 0640 "${CTRL_OUT}" 2>/dev/null || true
-  note "ctrl config: ${CTRL_OUT}"
+# 5) ctrl 站点配置：种子 -> 栈根 configs/ingest-ctrl/ingest-ctrl.toml（现场态）
+#    只补缺，不覆盖现场改动（与上面的种子同一纪律）；${SEC_*} 留给 ctrl 运行时解析。
+CTRL_SEED="${STACK_ROOT}/sys/configs/ingest-ctrl"
+CTRL_DIR="${STACK_ROOT}/configs/ingest-ctrl"
+if [ -d "${CTRL_SEED}" ]; then
+  mkdir -p "${CTRL_DIR}"
+  cp -n "${CTRL_SEED}/ingest-ctrl.toml" "${CTRL_DIR}/ingest-ctrl.toml" 2>/dev/null || true
+  chmod 0640 "${CTRL_DIR}/ingest-ctrl.toml" 2>/dev/null || true
+  note "ctrl config: ${CTRL_DIR}/ingest-ctrl.toml"
 fi
 
 # 3) 站点身份：三棵目录（数据面 / ctrl 管理面 / web）

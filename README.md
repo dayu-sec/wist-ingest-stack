@@ -13,14 +13,13 @@
 ```text
 sys/
   sys_model.yml          kind: docker-compose
-  docker-compose.yml     ingest + web
+  docker-compose.yml     ingest + ctrl + web
   setting/vars.yml       产品默认变量
-  configs/ingest/        warp-parse 种子（conf/connectors/topology/models）
-  configs/ctrl/ctrl.toml.tpl  ctrl 站点配置模板（渲染到栈根 configs/ctrl/ctrl.toml）
-  scripts/init-ingest.sh 备料：运行根 + 种子 + 渲染 ctrl 配置
+  configs/ingest-ctrl/ingest-ctrl.toml  ctrl 站点配置（容器内路径 + ${SEC_*} 占位）
+  scripts/init-ingest.sh 备料：运行根 + 种子 + 复制 ctrl 配置
 values/value.yml         现场覆盖
 identity/ingest/         站点身份（server cert/key + client CA）—— 站点态，不进包
-configs/ctrl/            ctrl 渲染后的站点配置（现场态，不入库、不进包）
+configs/ingest-ctrl/     ctrl 渲染后的站点配置（现场态，不入库、不进包）
 data-plane-run/work/     容器 /data 的宿主侧工作根 —— 站点态
 .wist/sec-value.yml      密钥（`ingest_ctrl_admin_token` → `${SEC_INGEST_CTRL_ADMIN_TOKEN}`，0640）
 ```
@@ -50,19 +49,21 @@ bash sys/scripts/init-ingest.sh
 gops sys perms --check
 gops sys perms --apply
 
-# 4) 起数据面 + 管理台
+# 4) 起三个容器：数据面 + 控制面（ctrl）+ 管理台
+#    ctrl 与 wist-center 同构：也是一个容器（挂 docker.sock 管理 ingest），宿主只暴露 127.0.0.1:19091。
 gops run start
 
-# 5) ctrl（宿主）：配置渲染 + 密钥
-#    init-ingest.sh 已把 sys/configs/ctrl/ctrl.toml.tpl 渲染到 configs/ctrl/ctrl.toml
-#    （只替换 ${INGEST_ROOT}，${SEC_*} 留给运行时）。token 在 .wist/sec-value.yml：
-#      ingest_ctrl_admin_token: <token>      ← 页面登录就粘这个值
-#    systemd 单元里指好两个环境变量即可：
-#      INGEST_CTRL_CONFIG=<栈根>/configs/ctrl/ctrl.toml
-#      INGEST_CTRL_SEC_FILE=<栈根>/.wist/sec-value.yml
-wist-ingest-ctrl --config configs/ctrl/ctrl.toml doctor
-wist-ingest-ctrl --config configs/ctrl/ctrl.toml apply   # 渲染 + wproj check + 重启 ingest
-wist-ingest-ctrl --config configs/ctrl/ctrl.toml serve   # 或交给 systemd
+# 5) 登录管理台
+#    admin token 在密钥文件里（配置里只有 ${SEC_INGEST_CTRL_ADMIN_TOKEN} 占位）：
+gops sec get ingest_ctrl_admin_token      # 复制输出的值
+#    浏览器打开 https://127.0.0.1:18080 （自签证书告警点继续），粘进去即可。
+#    // 想看只读账号：往 .wist/sec-value.yml 加 ingest_ctrl_viewer_token，
+#    // 并取消 configs/ingest-ctrl/ingest-ctrl.toml 里 viewer_token 那行注释，重启 ctrl 容器。
+
+# 6) 改站点配置时（网关台账 / 端口等）：改 configs/ingest-ctrl/ingest-ctrl.toml 后重启 ctrl；
+#    ctrl 的 apply 会渲染数据面配置 → wproj check → 重启 ingest（失败自动回滚）。
+#    docker restart wist-ingest-stack-ctrl
+#    # 或在页面点「应用配置并重启」
 ```
 
 ## 安全要点（都写进配置里了，改之前先读）

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.3] - 2026-10-29
+
+### 变更（控制面也进容器，对齐 wist-center-stack）
+
+- `wist-ingest-ctrl` 从“宿主 systemd”改成 compose 里的 **`ctrl` 服务**（镜像 `INGEST_CTRL_TAG`）：
+  挂 `docker.sock` 管理数据面容器、挂 `configs/ingest-ctrl`（配置）/`.wist`（密钥）/
+  `data-plane-run/work`（渲染目标）/`identity`（证书检查），宿主只映射 `127.0.0.1:19091`。
+- `web` 的 `/api` 上游从 `host.docker.internal:19091` 改为 **`ctrl:19091`**（同 compose 网络），
+  不再 `extra_hosts`；`INGEST_WEB_TAG` 升 `v0.1.2`。
+- 配置改名 + 改成容器内路径：`sys/configs/ingest-ctrl/ingest-ctrl.toml`（原 `sys/configs/ctrl/ctrl.toml`）。
+- 新增变量 `INGEST_CTRL_TAG`（默认 `v0.1.3`）。
+
 ## [0.1.2] - 2026-10-29
 
 ### 变更（配置与密钥的落地位置，对齐 wist-center-stack）

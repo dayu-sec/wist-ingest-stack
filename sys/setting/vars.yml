@@ -17,7 +17,10 @@ system:
   - name: INGEST_SPC
     value: ghcr.io/dayu-sec
   - name: INGEST_WEB_TAG
-    value: v0.1.0
+    value: v0.1.2
+  # 控制面镜像（跑在 compose 的 ctrl 服务里，与 wist-center 同构）
+  - name: INGEST_CTRL_TAG
+    value: v0.1.3
 
   # 数据面入口：这是互联网链路，默认发布到 0.0.0.0:6514
   - name: INGEST_BIND_IP
@@ -25,7 +28,7 @@ system:
   - name: INGEST_PORT
     value: 6514
 
-  # 管理台只给内网/回环；ctrl 管理面固定 127.0.0.1:19091（不在这里配）
+  # 管理台只给内网/回环；ctrl 容器内监 19091，宿主只映射 127.0.0.1（web 走 compose 网络）
   - name: WEB_BIND_IP
     value: 127.0.0.1
   - name: WEB_PORT
