@@ -16,4 +16,4 @@ allow_override = ["base", "file"]
 [connectors.params]
 base = "./data/out_dat"
 file = "default.proto"
-fmt = "proto"
+fmt = "proto-text"

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.1] - 2026-10-29
+
+### 修复（首次实机启动）
+
+- `ingest` 的 `command` 从 `["work"]` 改成 `["daemon"]`：`warp-parse:0.35.3-alpha` 的子命令只有
+  `daemon` / `batch` / `version`，`wparse work` 直接 `unrecognized subcommand` 导致无限重启。
+- 文件 sink 的 `fmt = "proto"` 改成 `"proto-text"`（上游只接受
+  `json,csv,show,kv,raw,proto-text`，否则容器启动即 `配置错误`）。
+
 ## [0.1.0] - 2026-10-29
 
 ### Added

@@ -21,7 +21,9 @@ services:
     image: ${WARP_SPC}/warp-parse:${WPARSE_TAG}
     restart: unless-stopped
     # 上游镜像 ENTRYPOINT=[wparse] CMD=[--help]；不写 command 会打印帮助后退出。
-    command: ["work"]
+    # 子命令只能是 daemon / batch / version —— **没有 `work`**
+    # （0.35.3-alpha 实测：`wparse work` → `error: unrecognized subcommand 'work'`，容器无限重启）。
+    command: ["daemon"]
     user: "999:999"
     working_dir: /data
     environment:
