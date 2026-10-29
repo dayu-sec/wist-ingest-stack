@@ -1,0 +1,59 @@
+# wist-ingest-stack — 数据面 warp-parse（TCP + mTLS） + 管理台
+#
+# 角色：
+#   ingest  数据面，= 上游 warp-parse 镜像（tcp source，framing=len，强制 mTLS）
+#   web     管理台（nginx 静态 + /api 反代到宿主上的 wist-ingest-ctrl）
+#   ctrl    不在 compose 里：它是宿主 daemon（systemd），负责渲染配置、校验、重启 ingest。
+#
+# 端口（宿主:容器）：
+#   ${INGEST_BIND_IP}:${INGEST_PORT}:6514   互联网入口（网关 → ingest）
+#   ${WEB_BIND_IP}:${WEB_PORT}:80           管理台，默认只绑回环
+#
+# 运行身份：上游镜像 `USER wparse`（名字而非数字），这里显式钉 999:999。
+# 宿主 bind 在 Linux 上不改属主，所以宿主侧必须 `gops sys perms` 对齐：
+#   属主=部署账号、属组=999、只读 0640/2750、读写 0660/2770(setgid)。
+# 缺失的挂载源会被 Docker 以 root 建成目录/文件 —— 由 scripts/init-ingest.sh 预建。
+name: wist-ingest-stack
+
+services:
+  ingest:
+    container_name: wist-ingest-stack-ingest
+    image: ${WARP_SPC}/warp-parse:${WPARSE_TAG}
+    restart: unless-stopped
+    # 上游镜像 ENTRYPOINT=[wparse] CMD=[--help]；不写 command 会打印帮助后退出。
+    command: ["work"]
+    user: "999:999"
+    working_dir: /data
+    environment:
+      - TZ=${TZ}
+    ports:
+      - "${INGEST_BIND_IP}:${INGEST_PORT}:6514"
+    volumes:
+      # 工作根：conf/ connectors/ topology/ models/ data/ identity/ 都在这里
+      - ./data-plane-run/work:/data
+      # 站点身份只读挂载（server cert/key + 客户端 CA）
+      - ./identity/ingest/trust:/data/identity/ingest:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # 加固可选：确认 wparse 的写点全在 /data 下后再打开
+    # （rescue / logs / out_dat 都在 data-plane-run/work 内）。
+    # read_only: true
+    # tmpfs:
+    #   - /tmp
+
+  web:
+    container_name: wist-ingest-stack-web
+    image: ${INGEST_SPC}/wist-ingest-web:${INGEST_WEB_TAG}
+    restart: unless-stopped
+    # ctrl 跑在宿主，容器用这个名字访问它的管理面（只绑 127.0.0.1:19091）。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${WEB_BIND_IP}:${WEB_PORT}:443"
+    volumes:
+      # 站点身份（服务端证书 + 访问 ctrl 的客户端证书 + ctrl 的信任锚）
+      - ./identity/web/tls:/etc/nginx/tls:ro
+    security_opt:
+      - no-new-privileges:true

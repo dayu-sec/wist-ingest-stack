@@ -1,0 +1,3 @@
+name: wist-ingest-stack
+kind: docker-compose
+vender: 'dayu-sec'

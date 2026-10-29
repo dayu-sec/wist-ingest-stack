@@ -1,0 +1,5 @@
+package /raw/ {
+    rule raw {
+        (chars:raw\0)
+    }
+}

@@ -1,0 +1,35 @@
+# 系统级变量定义（system 段，仅非密钥配置）—— 产品默认值
+#
+# 现场值不要写在这里：写 ops-prj 的 `values/<系统名>/sys_value.yml` 或本栈
+# `values/value.yml`（版本化）。
+# 链路：本文件 -> `gops sys update` -> sys/merged_vars.yml
+#       -> `gops sys localize`（+ values/ 覆盖）-> 栈根 .env
+#
+# 容器内端口/路径/服务名是应用契约，直接写在 sys/docker-compose.yml 里。
+system:
+  # 数据面：上游 warp-parse 镜像（与 wist-gateway-stack 的 WPARSE_TAG 保持同一版本，便于配套排查）
+  - name: WARP_SPC
+    value: ghcr.io/wp-labs
+  - name: WPARSE_TAG
+    value: 0.35.3-alpha
+
+  # 管理台镜像（wist* 由各仓流水线双推 ghcr + TCR）
+  - name: INGEST_SPC
+    value: ghcr.io/dayu-sec
+  - name: INGEST_WEB_TAG
+    value: v0.1.0
+
+  # 数据面入口：这是互联网链路，默认发布到 0.0.0.0:6514
+  - name: INGEST_BIND_IP
+    value: 0.0.0.0
+  - name: INGEST_PORT
+    value: 6514
+
+  # 管理台只给内网/回环；ctrl 管理面固定 127.0.0.1:19091（不在这里配）
+  - name: WEB_BIND_IP
+    value: 127.0.0.1
+  - name: WEB_PORT
+    value: 18080
+
+  - name: TZ
+    value: Asia/Shanghai

@@ -1,0 +1,17 @@
+# gops 生成物 / 现场态
+.env
+.wist/
+values/
+deliver.lock
+
+# 注意：sys/merged_vars.yml 是 `gops sys update` 的产物，但按约定**必须提交**
+# （`prj import` 依赖它）。早期模板曾把它忽略，这里改正。
+
+# 数据面运行根 + 站点身份（身份是站点态，不进包）
+data-plane-run/
+identity/
+
+# macOS
+.DS_Store
+# 迁移（gops >= 1.4）：模块按目标模型分组
+sys/*/mods

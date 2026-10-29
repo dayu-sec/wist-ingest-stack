@@ -1,0 +1,19 @@
+system:
+- name: WARP_SPC
+  value: ghcr.io/wp-labs
+- name: WPARSE_TAG
+  value: 0.35.3-alpha
+- name: INGEST_SPC
+  value: ghcr.io/dayu-sec
+- name: INGEST_WEB_TAG
+  value: v0.1.0
+- name: INGEST_BIND_IP
+  value: 0.0.0.0
+- name: INGEST_PORT
+  value: 6514
+- name: WEB_BIND_IP
+  value: 127.0.0.1
+- name: WEB_PORT
+  value: 18080
+- name: TZ
+  value: Asia/Shanghai

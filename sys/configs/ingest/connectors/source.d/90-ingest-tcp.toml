@@ -1,0 +1,14 @@
+# 由 wist-ingest-ctrl 生成，请勿手改（改站点配置后重新 apply）。
+# 这份种子与 ctrl 的渲染结果同名同内容：没有 ctrl 也能起；有 ctrl 时被幂等覆盖。
+[[connectors]]
+id = "tcp_tls_src"
+type = "tcp"
+allow_override = ["addr", "port", "framing", "tls"]
+
+[connectors.params]
+addr = "0.0.0.0"
+port = 6514
+# len 帧：<len><space><payload>，payload 里的换行/二进制不会错帧。
+framing = "len"
+# 必填 ca：不填不会要求客户端证书（mTLS 静默降级为单向）。
+tls = { enabled = true, cert = "/data/identity/ingest/server.pem", key = "/data/identity/ingest/server.key", ca = "/data/identity/ingest/client-ca.pem" }

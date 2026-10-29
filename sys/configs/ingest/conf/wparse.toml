@@ -1,0 +1,39 @@
+version = "1.0"
+robust = "normal"
+# v0：先保证“收进来、落住”，不做解析。接入 WPL 后改成 false。
+skip_parse = true
+skip_sink = false
+
+[models]
+wpl = "./models/wpl"
+oml = "./models/oml"
+
+[topology]
+sources = "./topology/sources"
+sinks = "./topology/sinks"
+
+[performance]
+rate_limit_rps = 0
+parse_workers = 2
+
+[rescue]
+path = "./data/rescue"
+
+[log_conf]
+level = "warn,ctrl=info,data=error,sink=info,connector=info"
+output = "File"
+
+[log_conf.file]
+path = "./data/logs/"
+
+[[stat.pick]]
+key = "pick_stat"
+target = "*"
+
+[[stat.parse]]
+key = "parse_stat"
+target = "*"
+
+[[stat.sink]]
+key = "sink_stat"
+target = "*"

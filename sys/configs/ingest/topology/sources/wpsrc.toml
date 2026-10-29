@@ -1,0 +1,6 @@
+# 由 wist-ingest-ctrl 生成，请勿手改（改站点配置后重新 apply）。
+[[sources]]
+key = "tcp_in"
+enable = true
+connect = "tcp_tls_src"
+tags = ["type:tcp", "role:ingest"]

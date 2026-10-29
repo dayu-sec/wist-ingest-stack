@@ -1,0 +1,6 @@
+[defaults]
+tags = ["env:prod"]
+
+[defaults.expect]
+basis = "total_input"
+mode = "warn"

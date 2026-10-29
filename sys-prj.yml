@@ -1,0 +1,39 @@
+test_envs:
+  dep_root: ''
+  deps: []
+
+# `gops sys package` 排除（默认模式与 --full 都生效）
+pkg_exclude:
+  - data-plane-run
+  - identity
+  - .wist
+  - .env
+  - packages
+
+# 现场态：升级/重建时不覆盖、不删除
+protect:
+  - data-plane-run
+  - identity
+  - .env
+  - packages
+  - values
+
+# 对外契约：站点身份（服务端证书 + 私钥 + 客户端 CA）。
+# 换一份 = 所有网关都要换信任锚，所以整目录进 contract。
+# ⚠ contract 归档含私钥：落点（ops-prj.yml: contract.target）必须离机/加密存放。
+contract:
+  - identity
+
+# 备份取 backup ∪ contract；identity 已由 contract 覆盖，这里不要重复列。
+backup:
+  - data-plane-run
+
+perms:
+  services:
+    ingest:
+      uid: 999
+      gid: 999
+
+secrets:
+  file: .wist/sec_value.yml
+  mode: "0640"
