@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    types: [opened, reopened]
+    branches:
+      - "*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # 1. 渲染 compose：变量取自 .env.example，确保 sys/docker-compose.yml 与 vars 定义一致。
+  compose:
+    name: Compose config
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Render compose
+        run: |
+          docker compose --env-file .env.example \
+            -f sys/docker-compose.yml --project-directory . config > /tmp/rendered.yml
+          # 数据面必须钉死运行身份与命令，否则容器会以镜像默认 CMD（--help）退出。
+          grep -q 'target: 6514' /tmp/rendered.yml
+          grep -q 'user: 999:999' /tmp/rendered.yml
+          grep -q -- '- work' /tmp/rendered.yml
+
+  # 2. 脚本静态检查（init-ingest.sh / gen-mtls-dev.sh / dev/push-images.sh）。
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Ensure shellcheck
+        run: command -v shellcheck >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y shellcheck)
+      - run: shellcheck sys/scripts/*.sh dev/*.sh
+
+  # 3. 种子配置的语法检查（TOML 能被解析即可；语义校验交给部署镜像里的 wproj）。
+  seed-config:
+    name: Seed config syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Parse TOML seeds
+        run: |
+          python3 - <<'PY'
+          import pathlib, tomllib, sys
+          bad = []
+          for path in pathlib.Path('sys/configs/ingest').rglob('*.toml'):
+              try:
+                  tomllib.loads(path.read_text())
+              except Exception as exc:
+                  bad.append(f"{path}: {exc}")
+          if bad:
+              print("\n".join(bad), file=sys.stderr)
+              sys.exit(1)
+          print("all TOML seeds parse")
+          PY
+
+      - name: Assert required seeds exist
+        run: |
+          test -f sys/configs/ingest/conf/wparse.toml
+          test -f sys/configs/ingest/connectors/source.d/90-ingest-tcp.toml
+          test -f sys/configs/ingest/topology/sources/wpsrc.toml
+          test -f sys/configs/ctrl/ctrl.toml
