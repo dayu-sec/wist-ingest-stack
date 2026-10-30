@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.0] - 2026-10-30
+
+### 新增（对齐 wist-center 的控制面 link / gateway 的数据面配置页）
+
+- **数据面接入授权**：管理台「网关接入」页逐网关签发一次性接入券（短 TTL、落盘只存 sha256、
+  明文只交付一次），网关用 `/api/v1/link/redeem` 登记客户端证书指纹；支持撤销；
+  与 center 的「连接 Gateway」是同一套逻辑，方向是数据面（gateway → ingest）。
+- **wparse 配置与规则**：管理台「配置与规则」页只读浏览数据面工作根
+  （`conf/` `connectors/` `topology/` `models/` + `wparse.local.toml`），口径与 gateway 一致。
+- **管理台风格对齐 wist-center**：设计令牌、侧边栏 + 状态条、卡片/徽标/代码块、明暗主题、
+  IBM Plex 本地字体；新增「身份与状态」页。
+- 站点配置模板新增 `[ctrl.link]`（`ttl_seconds` / `advertise`）；旧版 ctrl 会忽略这一段。
+
+### 升级注意
+
+- 需要 **wist-ingest-ctrl ≥ 0.2.0** 与 **wist-ingest-web ≥ 0.2.0**；只升一边会出现
+  「授权页 404 / 页面读不到新接口」。
+- 现场已有的 `configs/ingest-ctrl/ingest-ctrl.toml` **不会**被 `init-ingest.sh` 覆盖：
+  升级后手工补 `[ctrl.link] advertise = "<网关能连到的 host:port>"`，否则交付的入口是
+  `0.0.0.0:6514`（管理台会提示）。
+
 ## [0.1.3] - 2026-10-29
 
 ### 变更（控制面也进容器，对齐 wist-center-stack）
