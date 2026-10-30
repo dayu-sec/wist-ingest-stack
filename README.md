@@ -60,11 +60,39 @@ gops sec get ingest_ctrl_admin_token      # 复制输出的值
 #    // 想看只读账号：往 .wist/sec-value.yml 加 ingest_ctrl_viewer_token，
 #    // 并取消 configs/ingest-ctrl/ingest-ctrl.toml 里 viewer_token 那行注释，重启 ctrl 容器。
 
-# 6) 改站点配置时（网关台账 / 端口等）：改 configs/ingest-ctrl/ingest-ctrl.toml 后重启 ctrl；
+# 6) 改站点配置时（网关台账 / 端口 / 接入入口等）：改 configs/ingest-ctrl/ingest-ctrl.toml 后重启 ctrl；
 #    ctrl 的 apply 会渲染数据面配置 → wproj check → 重启 ingest（失败自动回滚）。
 #    docker restart wist-ingest-stack-ctrl
 #    # 或在页面点「应用配置并重启」
+
+# 7) 给网关签发数据面接入授权（管理台「网关接入」页）：
+#    - 先把 [ctrl.link] advertise 写成网关能连到的地址（如 ingest.example.com:6514），重启 ctrl；
+#    - 逐网关「生成接入券」→ 把接入串 / client CA / 消费命令交给网关侧；
+#    - 网关消费后状态变成「已接入」，并登记它的客户端证书指纹。
 ```
+
+## 数据面接入授权（gateway → ingest）
+
+管理台的「网关接入」页把 wist-center 的**控制面** link 逻辑搬到**数据面**：一次性接入券、
+短 TTL（`[ctrl.link] ttl_seconds`，默认 900s）、落盘只存 sha256、明文只交付一次。
+
+- 签发：`POST /api/v1/gateways/{gateway}/link-token`（admin）；
+- 消费：`POST /api/v1/link/redeem`（**免 Bearer**，凭一次性券）→ 网关登记客户端证书 SHA-256；
+- 撤销：`DELETE /api/v1/gateways/{gateway}/link`（admin）→ 清券 + 清指纹绑定；
+- 台账：`data-plane-run/work/.ctrl/link-grants.json`（0600，无明文券）；
+- 租户以 `[[gateways]]` 台账为准，接入方自报只做交叉核对。
+
+**强制点仍是 mTLS**：券只负责「谁被授权接入、用哪张证书」，真正的放行由 `tcp` source 的
+`client_ca` 校验完成。上游不把 peer cert 写进记录，所以租户 tag 仍来自 source 的静态 tags，
+不能按连接区分（见「已知边界」）。
+
+## 配置与规则（只读）
+
+管理台的「配置与规则」页直接读数据面工作根（ctrl 的 `/work` 与 ingest 的 `/data` 是同一份）：
+
+- 白名单：`conf/` `connectors/` `topology/` `models/` + `wparse.local.toml`；
+- 只读、不展开符号链接、拒绝 `..`/绝对路径；单文件 ≤ 1 MiB，非 UTF-8 只标 `binary`；
+- 看到的就是**已落盘、正在生效**的那一份（与 gateway 的「数据面配置」页同一套口径）。
 
 ## 安全要点（都写进配置里了，改之前先读）
 
@@ -74,12 +102,14 @@ gops sec get ingest_ctrl_admin_token      # 复制输出的值
 4. **ctrl 不持有 CA 私钥**：它只渲染配置、校验、重启。
 5. **管理面双向认证**（与 gwlinkd↔Center 同构）：ctrl 当服务端（`identity/ctrl/tls`），web 容器当客户端（`identity/web/tls/web-client.*`），nginx 用 `proxy_ssl_*` 出示证书并校验 ctrl。
 6. **`identity/` 进 `contract`**：换一份等于所有网关换信任锚。该归档含私钥，落点必须离机/加密。
-7. **管理面鉴权对齐 center**：Bearer token + sha256 hash；`admin` 可下发/重启，`viewer` 只读。未配 token 且未显式 `allow_anonymous` → ctrl 拒绝启动。
+7. **管理面鉴权对齐 center**：Bearer token + sha256 hash；`admin` 可下发/重启/签发授权，`viewer` 只读。未配 token 且未显式 `allow_anonymous` → ctrl 拒绝启动。
 8. 轮换：`ca` 支持多张 PEM，走「先加新根 → 换叶 → 下旧根」；换完必须触发重连（`apply` 默认重启）。
+9. **接入券是凭据**：只走管理台 / 一次性交付，别贴进工单、IM 或日志；`ttl_seconds` 保持短（默认 15 分钟）。
+10. **`[ctrl.link] advertise` 决定交付给网关的入口**：写 `0.0.0.0` 或留空推导出通配地址时，网关连不上；管理台会用琥珀色提示。
 
 ## 已知边界
 
-- 上游 `tcp` source 不把 peer cert 的 CN/序列号写进 `Tags`，所以**单端口模式下无法按证书做租户归属**；多租户隔离需要上游补丁或每租户独立 listener。
+- 上游 `tcp` source 不把 peer cert 的 CN/序列号写进 `Tags`，所以**单端口模式下无法按证书做租户归属**；授权台账记录「哪张指纹被允许」，但数据记录里的 `tenant` tag 仍是 source 级静态标签。多租户隔离需要上游补丁或每租户独立 listener。
 - `sys/configs/ingest/models/` 里的 `raw_log.wpl` 是 `skip_parse = true` 时的原文旁路占位；接入真实 WPL/OML 后替换。
 - `wproj check` 版本差异：老版本会去 `models/sources/` 找 `wpsrc.toml` 并报错（wist-gateway-stack 同样报），以部署镜像里的 `wproj` 为准。
 

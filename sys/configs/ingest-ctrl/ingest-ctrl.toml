@@ -39,6 +39,15 @@ key_file = "/identity/ctrl/tls/ctrl.key"
 client_ca_file = "/identity/ctrl/tls/web-client-ca.pem"
 allow_unauthenticated = false
 
+# 数据面接入授权（gateway → ingest）：一次性接入券的 TTL 与交给网关的入口。
+# 与 center 的控制面 link 同一套逻辑（短 TTL / 只存 sha256 / 明文只交付一次）。
+# ctrl < 0.2.0 会忽略这一段（未知表不报错），升到 0.2.0+ 后才生效。
+[ctrl.link]
+ttl_seconds = 900
+# 网关实际要连的数据面地址（host 可以是域名；IPv6 写 [2001:db8::1]:6514）。
+# 留空则由 ingest.bind:port 推导；bind = 0.0.0.0 时管理台会提示先配这一项。
+# advertise = "ingest.example.com:6514"
+
 [ingest]
 bind = "0.0.0.0"
 port = 6514
