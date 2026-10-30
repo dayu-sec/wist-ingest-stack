@@ -28,7 +28,7 @@ jobs:
           # 数据面必须钉死运行身份与命令，否则容器会以镜像默认 CMD（--help）退出。
           grep -q 'target: 6514' /tmp/rendered.yml
           grep -q 'user: 999:999' /tmp/rendered.yml
-          grep -q -- '- work' /tmp/rendered.yml
+          grep -q 'data-plane-run/work' /tmp/rendered.yml
 
   # 2. 脚本静态检查（init-ingest.sh / gen-mtls-dev.sh / dev/push-images.sh）。
   shellcheck:
