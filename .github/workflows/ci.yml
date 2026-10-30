@@ -56,6 +56,11 @@ jobs:
                   tomllib.loads(path.read_text())
               except Exception as exc:
                   bad.append(f"{path}: {exc}")
+          for path in pathlib.Path('sys/configs/ingest-ctrl').rglob('*.toml'):
+              try:
+                  tomllib.loads(path.read_text())
+              except Exception as exc:
+                  bad.append(f"{path}: {exc}")
           if bad:
               print("\n".join(bad), file=sys.stderr)
               sys.exit(1)
@@ -67,4 +72,4 @@ jobs:
           test -f sys/configs/ingest/conf/wparse.toml
           test -f sys/configs/ingest/connectors/source.d/90-ingest-tcp.toml
           test -f sys/configs/ingest/topology/sources/wpsrc.toml
-          test -f sys/configs/ctrl/ctrl.toml
+          test -f sys/configs/ingest-ctrl/ingest-ctrl.toml
