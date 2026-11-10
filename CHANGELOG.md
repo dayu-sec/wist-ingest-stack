@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.3.1] - 2026-11-11
+
+### 变更（补 `_gal` + `flow localize`：配置开始跟着版本走）
+
+- **`_gal/` + `sys/workflows/operators.gxl`**：`gops sys localize` 现在会跑 `gx run localize`
+  （之前对 `kind: docker-compose` 是**静默跳过**，所以栈升级后 `data-plane-run/work/` 永远是旧的）。
+  流程：⓿ 前置门禁 → ① 建渲染目标目录 → ② A 类 10 件 `gx.tpl` → ③ `init-ingest.sh`（C 类引导）
+  → ④ `gops sys perms --apply` → ⑤ 门禁。
+- **13 个种子分两类**：A 类 10 件（产品内容，每次覆盖 `data-plane-run/work/**`）；
+  C 类 3 件（`ingest-ctrl.toml` + ctrl 生成的 `90-ingest-tcp.toml` / `wpsrc.toml`，只补缺、不进 tpl）。
+- 新增 `sys/scripts/check-stack.sh`（`--gate` / `--only prereq`）：前置能力、A/C 在位、
+  无 handlebars 残留、变量与 `.env.example` 一致性。
+- **部署值改为环境变量优先**（需要 ctrl ≥ 0.3.1）：`INGEST_BIND_IP` / `INGEST_PORT` /
+  `INGEST_ADVERTISE_HOST` / `CRED_BIND_IP` / `CRED_PORT` 由 compose 注入，
+  `configs/ingest-ctrl/ingest-ctrl.toml` 里那几行降为回落默认值。
+- `.gitignore` 增 `.report` / `.run*`（gx 运行产物）。
+
+### 升级注意
+
+- 需要 **wist-ingest-ctrl ≥ 0.3.1**（环境变量优先那一版）。
+- **A 类文件每次 localize 覆盖**：以后改 `data-plane-run/work/{conf,connectors,topology,models}`
+  会被下一轮 localize 冲掉——要改请改 `sys/configs/ingest/**` 再 `gops sys localize`。
+- 端口 / 入口改 `values/` 或 `sys/setting/vars.yml`，不要再改 ctrl 配置文件里的 `[ingest]` / `advertise`。
+- 首次部署不装 `gx` 会在 `prj upgrade` 的 regenerate 阶段当場失败并回滚（手工 localize 则是静默跳过）。
+
 ## [0.3.0] - 2026-11-11
 
 ### 新增（管理台域名入口 + 访问凭据接入 cred）
