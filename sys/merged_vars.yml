@@ -8,7 +8,7 @@ system:
 - name: INGEST_WEB_TAG
   value: v0.2.0
 - name: INGEST_CTRL_TAG
-  value: v0.3.1
+  value: v0.3.2
 - name: INGEST_CTRL_IMAGE
   value: ''
 - name: INGEST_BIND_IP

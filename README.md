@@ -46,14 +46,16 @@ data-plane-run/work/     容器 /data 的宿主侧工作根 —— **A 类渲染
 2. **不要渲染 C 类**：那两件是 ctrl 按站点配置 apply 出来的，覆盖等于把收数地址 / 证书路径
    冲回出厂值；`ingest-ctrl.toml` 里有运维手改的台账。
 
-部署值（端口 / 入口）走 **var → `.env` → compose 注入**，ctrl ≥ 0.3.1 **环境变量优先**，
-配置文件里那几行只是回落默认值：
+部署值（端口 / 入口）：**只有“对端要拨的地址”是部署值**（`[ctrl.link] advertise`）。
+栈变量 → `.env` → compose 注入，ctrl 侧环境变量优先；容器内的监听地址是**应用契约**，不接受覆盖。
 
-| 栈变量 | 注入的环境变量 | 覆盖 |
+| 栈变量 | 注入 | 作用 |
 |---|---|---|
-| `INGEST_BIND_IP` / `INGEST_PORT` | 同名 | `[ingest] bind` / `port`（端口也用于 advertise） |
-| `INGEST_ADVERTISE_HOST` | 同名 | `[ctrl.link] advertise` 的 host（端口取 `INGEST_PORT`） |
-| `CRED_BIND_IP` / `CRED_PORT` | 同名 | `[ctrl.credentials] listen`（未配该段时忽略） |
+| `INGEST_ADVERTISE_HOST` | `INGEST_ADVERTISE_HOST` | advertise 的 host；空 = 沿用配置里的 advertise，再退到 `INGEST_BIND_IP` |
+| `INGEST_PORT` | `INGEST_PORT` | 宿主发布端口（`ports: ${INGEST_PORT}:6514`）**且**是 advertise 的端口 |
+
+`INGEST_BIND_IP` / `CRED_BIND_IP` / `CRED_PORT` 只影响**宿主侧**绑定（`ports:` 的 host_ip/port），
+容器内仍然监听 `0.0.0.0:6514` 与 `0.0.0.0:19092`。
 
 ## 首次部署（Linux）
 

@@ -1,5 +1,19 @@
 # Changelog
 
+# Changelog
+
+## [0.3.2] - 2026-11-11
+
+### 修正（容器监听不跟着环境变量走）
+
+0.3.1 把 `INGEST_BIND_IP` / `CRED_BIND_IP` / `CRED_PORT` 注进了容器，ctrl 因此把
+`[ctrl.credentials] listen` 绑到容器 **loopback**（日志 `listener 127.0.0.1:19092`），
+宿主端口映射直接失效（健康探针 000）。
+
+- compose 只注入 advertise 需要的两个：`INGEST_ADVERTISE_HOST`、`INGEST_PORT`（宿主端口）。
+- `INGEST_BIND_IP` / `CRED_BIND_IP` / `CRED_PORT` 退回只做 `ports:` 的宿主侧绑定。
+- 需要 **wist-ingest-ctrl ≥ 0.3.2**（它会忽略这三项监听覆盖）。
+
 ## [0.3.1] - 2026-11-11
 
 ### 变更（补 `_gal` + `flow localize`：配置开始跟着版本走）

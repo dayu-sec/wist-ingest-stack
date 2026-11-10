@@ -12,9 +12,10 @@
 #
 # 归属：**现场态（C 类）**。`flow localize` 只补缺、**不渲染**本文件 ——
 # 里面有网关台账（`[[gateways]]`）和运维手改项，整份渲染会把它们冲掉。
-# 部署值（`[ingest] bind/port`、`[ctrl.link] advertise`、`[ctrl.credentials] listen`）
-# 已改为**环境变量优先**（compose 从 `.env` 注入）：本文件里写的是**回落默认值**，
-# 改端口/入口请改 `sys/setting/vars.yml`（或 values），不用改这里。
+# 部署值：只有 `[ctrl.link] advertise`（对端要拨的入口）走环境变量
+# （`INGEST_ADVERTISE_HOST` + `INGEST_PORT` 的**宿主**端口）。
+# `[ingest] bind/port` 与 `[ctrl.credentials] listen` 是**容器内监听 = 应用契约**
+# （compose 映射目标写死 :6514 / :19092），**不要**用环境变量覆盖。
 #
 # 秘密不进这个文件：`${SEC_INGEST_CTRL_ADMIN_TOKEN}` 由 ctrl 启动时从
 # `INGEST_CTRL_SEC_FILE` 指向的密钥文件解析（键 `ingest_ctrl_admin_token`
@@ -72,7 +73,8 @@ ttl_seconds = 900
 # admin_roles = ["admin"]
 
 [ingest]
-# 回落值：实际生效的是环境变量 INGEST_BIND_IP / INGEST_PORT（compose 从 .env 注入）。
+# 容器内监听（应用契约）：宿主侧映射由 compose 的 ${INGEST_PORT}:6514 负责，
+# 交付给网关的入口是 [ctrl.link] advertise（由 INGEST_ADVERTISE_HOST 覆盖 host）。
 bind = "0.0.0.0"
 port = 6514
 # 强制 len 帧；line 会在多行日志上错帧。
