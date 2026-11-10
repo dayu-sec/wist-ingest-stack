@@ -18,3 +18,7 @@ sys/*/mods
 
 # 现场渲染出的配置（模板在 sys/configs/**/*.tpl）——含站点路径，不入库
 /configs/
+
+# gx 运行时产物（flow 执行记录 / 运行态工作文件）
+.report
+.run*

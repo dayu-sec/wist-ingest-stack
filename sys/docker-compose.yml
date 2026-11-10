@@ -62,6 +62,14 @@ services:
       # 配置与密钥都在挂载点里（密钥真值不入配置、不进镜像）。
       - INGEST_CTRL_CONFIG=/configs/ingest-ctrl.toml
       - INGEST_CTRL_SEC_FILE=/sec/sec-value.yml
+      # 部署值**单一真源**：栈变量 → .env → 这里注入。ctrl 侧环境变量优先，
+      # `[ingest] bind/port` / `[ctrl.credentials] listen` / `[ctrl.link] advertise`
+      # 在配置文件里只是回落默认值（改 values 不用去改配置文件）。
+      - INGEST_BIND_IP=${INGEST_BIND_IP}
+      - INGEST_PORT=${INGEST_PORT}
+      - INGEST_ADVERTISE_HOST=${INGEST_ADVERTISE_HOST:-}
+      - CRED_BIND_IP=${CRED_BIND_IP}
+      - CRED_PORT=${CRED_PORT}
     ports:
       # 仅供宿主调试（curl / 命令行）；web 走 compose 网络直连 ctrl:19091。
       - "127.0.0.1:19091:19091"

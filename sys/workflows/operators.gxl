@@ -1,0 +1,88 @@
+// 系统运维流程（**本地定义**，不引外部 ops-gxl 模块）。
+//
+// 由 `_gal/work.gxl` 的 `mod main : operators` 纳入；gops 以 `gx run <flow>` 调用
+// （`gops sys localize` 写完栈根 `.env` 之后会跑它）。
+// 约定：GXL 行注释是 `//`（`#` 是注解语法 `#[...]`，不是注释）。
+//
+// ## 这个栈的 `configs` 有两类归属（**最容易搞错的地方**）
+//
+//   A · 产品内容（10 件，每次 localize **覆盖**）—— 来自 `sys/configs/ingest/**`：
+//       conf/wparse.toml、connectors/sink.d/10-file.toml、models/**（2）、topology/sinks/**（6）。
+//       渲染目标是**运行态**目录 `data-plane-run/work/**`（= ingest 容器的 `/data`），
+//       不是 `configs/` —— 本栈的数据面容器挂的是 data-plane-run，没有单独的 configs 挂载。
+//       代价：运维手改运行态会被下一轮 localize 覆盖（源在 `sys/configs/`，这是有意的）。
+//
+//   C · 现场态（3 件，**只补缺**，绝不进 tpl）：
+//       - `ingest-ctrl/ingest-ctrl.toml`：ctrl 自己的站点配置 + 网关台账，运维手改；
+//       - `connectors/source.d/90-ingest-tcp.toml`、`topology/sources/wpsrc.toml`：
+//         **由 ctrl 生成**（apply 时按站点配置渲染）。这两件进 tpl = 每次 localize
+//         把站点 apply 的结果冲回出厂值，收数地址/证书路径直接失效。
+//
+// ## 部署值只有一个真源
+//
+// 端口/地址这类值走 `sys/setting/vars.yml` → `gops sys localize` → 栈根 `.env`
+// → compose 注入 ctrl 的环境变量（`INGEST_BIND_IP` / `INGEST_PORT` /
+// `CRED_BIND_IP` / `CRED_PORT` / `INGEST_ADVERTISE_HOST`）。
+// ctrl 里是**环境变量优先**，配置文件里那几行只是回落默认值。
+mod operators {
+
+  flow localize {
+    // ⓿ 前置门禁：这台机器能不能跑 localize（gx/gops/docker/openssl、`.env` 可读）。
+    //    放最前面：后面的脚本在缺依赖时会静默退 1，等到最后才发现就晚了。
+    gx.cmd ( "./sys/scripts/check-stack.sh --gate --only prereq" );
+
+    // ① 渲染目标目录。必须显式列出（Ubuntu 的 /bin/sh 是 dash，**不做 brace 展开**）。
+    //    先建目录：gx.tpl 不会自己造父目录；而且 Docker 在 up 时会把缺失的挂载源建成
+    //    root:root，之后部署账号写不动。
+    gx.cmd ( "mkdir -p data-plane-run/work/conf data-plane-run/work/connectors/sink.d data-plane-run/work/connectors/source.d data-plane-run/work/topology/sinks/business.d data-plane-run/work/topology/sinks/infra.d data-plane-run/work/topology/sources data-plane-run/work/models/oml/raw_log data-plane-run/work/models/wpl data-plane-run/work/identity" );
+
+    // ② A 类：产品内容，每次覆盖（这就是 0.3.0 之前 `copy_missing` 的替代 ——
+    //    老做法会让「栈升了、运行态还是旧配置」，新加的默认项永远不出现）。
+    //    这些文件里没有站点变量，也没有 `{{ }}` 占位，所以 `data: "{}"`。
+    gx.tpl ( tpl: "./sys/configs/ingest/conf/wparse.toml",
+             dst: "./data-plane-run/work/conf/wparse.toml", data: "{}" );
+
+    gx.tpl ( tpl: "./sys/configs/ingest/connectors/sink.d/10-file.toml",
+             dst: "./data-plane-run/work/connectors/sink.d/10-file.toml", data: "{}" );
+
+    gx.tpl ( tpl: "./sys/configs/ingest/models/wpl/raw_log.wpl",
+             dst: "./data-plane-run/work/models/wpl/raw_log.wpl", data: "{}" );
+
+    gx.tpl ( tpl: "./sys/configs/ingest/models/oml/raw_log/adm.oml",
+             dst: "./data-plane-run/work/models/oml/raw_log/adm.oml", data: "{}" );
+
+    gx.tpl ( tpl: "./sys/configs/ingest/topology/sinks/defaults.toml",
+             dst: "./data-plane-run/work/topology/sinks/defaults.toml", data: "{}" );
+
+    gx.tpl ( tpl: "./sys/configs/ingest/topology/sinks/business.d/ingest.toml",
+             dst: "./data-plane-run/work/topology/sinks/business.d/ingest.toml", data: "{}" );
+
+    gx.tpl ( tpl: "./sys/configs/ingest/topology/sinks/infra.d/default.toml",
+             dst: "./data-plane-run/work/topology/sinks/infra.d/default.toml", data: "{}" );
+
+    gx.tpl ( tpl: "./sys/configs/ingest/topology/sinks/infra.d/error.toml",
+             dst: "./data-plane-run/work/topology/sinks/infra.d/error.toml", data: "{}" );
+
+    gx.tpl ( tpl: "./sys/configs/ingest/topology/sinks/infra.d/miss.toml",
+             dst: "./data-plane-run/work/topology/sinks/infra.d/miss.toml", data: "{}" );
+
+    gx.tpl ( tpl: "./sys/configs/ingest/topology/sinks/infra.d/residue.toml",
+             dst: "./data-plane-run/work/topology/sinks/infra.d/residue.toml", data: "{}" );
+
+    // ③ C 类 + 运行根备料（幂等）：只补缺 3 件（ctrl 站点配置、ctrl 生成的两件），
+    //    建 identity 三棵目录，并把 `data-plane-run/work` / `identity` 归到容器属组。
+    //    必须在 ② 之后：C 类里那两件是「ctrl 还没 apply 过」时的引导内容，
+    //    顺序反了会把刚渲染的东西当成缺失再补一份出厂值。
+    gx.cmd ( "./sys/scripts/init-ingest.sh" );
+
+    // ④ 宿主侧属主/权限对齐（Linux 专有；macOS / OrbStack 直接跳过）。
+    //    必须在 localize **最后**（前面几步会新建/重写文件），也必须在 `docker compose up`
+    //    之前（Docker 会把缺失的挂载源建成 root:root，之后就写不动了）。
+    gx.cmd ( "gops sys perms --help >/dev/null 2>&1 || { echo '错误：本栈需要 gops >= 2.7（gops sys perms）'; exit 1; }; gops sys perms --apply" );
+
+    // ⑤ 门禁：渲染无残留占位、A 类都在运行态、C 类没被误改、变量三处一致。
+    //    `prj upgrade` 的 regenerate 阶段调的就是 localize —— 新模板渲出来是错的，
+    //    会在这里**在 pull/up 之前**失败并回滚。
+    gx.cmd ( "./sys/scripts/check-stack.sh --gate" );
+  }
+}

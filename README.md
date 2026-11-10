@@ -11,19 +11,49 @@
 ## 目录
 
 ```text
+_gal/                    gx 项目入口（work.gxl + 版本管理）—— 没有它 `gops sys localize` 会**静默跳过**配置渲染
 sys/
   sys_model.yml          kind: docker-compose
   docker-compose.yml     ingest + ctrl + web
   setting/vars.yml       产品默认变量
-  configs/ingest-ctrl/ingest-ctrl.toml  ctrl 站点配置（容器内路径 + ${SEC_*} 占位）
-  scripts/init-ingest.sh 备料：运行根 + 种子 + 复制 ctrl 配置
+  workflows/operators.gxl  flow localize（备料/渲染/perms/门禁）
+  configs/ingest/**      **A 类模板源**（产品内容，10 件，每次 localize 覆盖）
+  configs/ingest-ctrl/ingest-ctrl.toml  **C 类**：ctrl 站点配置（现场态，只补缺）
+  scripts/init-ingest.sh 备料：运行根 + C 类引导 + 属组
+  scripts/check-stack.sh 门禁：⓿ 前置能力 / ⑤ 渲染结果 + 变量一致性
 values/value.yml         现场覆盖（**脱离运维项目单独部署时**生效；在 ops-prj 里则以
                         `<ops-prj>/values/wist-ingest-stack/sys_value.yml` 为准）
 identity/ingest/         站点身份（server cert/key + client CA）—— 站点态，不进包
-configs/ingest-ctrl/     ctrl 渲染后的站点配置（现场态，不入库、不进包）
-data-plane-run/work/     容器 /data 的宿主侧工作根 —— 站点态
+identity/ctrl/cred/      cred 接入材料（cred.toml + 证书）—— 站点态，不进包
+configs/ingest-ctrl/     ctrl 的站点配置（现场态，不入库、不进包）
+data-plane-run/work/     容器 /data 的宿主侧工作根 —— **A 类渲染目标** + 运行态
 .wist/sec-value.yml      密钥（`ingest_ctrl_admin_token` → `${SEC_INGEST_CTRL_ADMIN_TOKEN}`，0640）
 ```
+
+## 配置从哪来（A 类 / C 类 + 部署值）
+
+`gops sys localize` 会跑 `gx run localize`（`sys/workflows/operators.gxl`），13 个种子分两类：
+
+| 类 | 件数 | 内容 | 行为 |
+|---|---|---|---|
+| **A · 产品内容** | 10 | `conf/wparse.toml`、`connectors/sink.d/10-file.toml`、`models/**`（2）、`topology/sinks/**`（6） | **每次覆盖** `data-plane-run/work/**`（跟版本走） |
+| **C · 现场态** | 3 | `ingest-ctrl/ingest-ctrl.toml`（含网关台账）+ ctrl 生成的 `90-ingest-tcp.toml`、`wpsrc.toml` | **只补缺**，绝不进 tpl |
+
+两条纪律：
+
+1. **改 A 类要改 `sys/configs/ingest/**`**，然后 `gops sys localize`。直接改
+   `data-plane-run/work/` 里的运行态会被下一轮 localize 冲掉（这是「不漂」的代价）。
+2. **不要渲染 C 类**：那两件是 ctrl 按站点配置 apply 出来的，覆盖等于把收数地址 / 证书路径
+   冲回出厂值；`ingest-ctrl.toml` 里有运维手改的台账。
+
+部署值（端口 / 入口）走 **var → `.env` → compose 注入**，ctrl ≥ 0.3.1 **环境变量优先**，
+配置文件里那几行只是回落默认值：
+
+| 栈变量 | 注入的环境变量 | 覆盖 |
+|---|---|---|
+| `INGEST_BIND_IP` / `INGEST_PORT` | 同名 | `[ingest] bind` / `port`（端口也用于 advertise） |
+| `INGEST_ADVERTISE_HOST` | 同名 | `[ctrl.link] advertise` 的 host（端口取 `INGEST_PORT`） |
+| `CRED_BIND_IP` / `CRED_PORT` | 同名 | `[ctrl.credentials] listen`（未配该段时忽略） |
 
 ## 首次部署（Linux）
 
@@ -36,8 +66,11 @@ cp .env.example .env            # 或 gops sys localize
 gops sys update                 # 生成 sys/merged_vars.yml（需提交）
 gops sys localize
 
-# 2) 预建运行根（必须在 up 之前，且以部署账号执行）
+# 2) 预建运行根 + 渲染 A 类配置（必须在 up 之前，且以部署账号执行）
+#    上面第 1 步的 `gops sys localize` 已经跑过 `flow localize`（渲染 + 备料 + perms + 门禁），
+#    这里只是手工兼底（或只想重跑备料时）：
 bash sys/scripts/init-ingest.sh
+./sys/scripts/check-stack.sh          # 只报告；--gate 时失败直接退 1
 
 # 3) 放站点身份（三棵目录）
 #    开发：

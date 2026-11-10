@@ -8,13 +8,15 @@ system:
 - name: INGEST_WEB_TAG
   value: v0.2.0
 - name: INGEST_CTRL_TAG
-  value: v0.3.0
+  value: v0.3.1
 - name: INGEST_CTRL_IMAGE
   value: ''
 - name: INGEST_BIND_IP
   value: 0.0.0.0
 - name: INGEST_PORT
   value: 6514
+- name: INGEST_ADVERTISE_HOST
+  value: ''
 - name: WEB_BIND_IP
   value: 127.0.0.1
 - name: WEB_PORT

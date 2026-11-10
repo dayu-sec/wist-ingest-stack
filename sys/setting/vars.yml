@@ -20,7 +20,7 @@ system:
     value: v0.2.0
   # 控制面镜像（跑在 compose 的 ctrl 服务里，与 wist-center 同构）
   - name: INGEST_CTRL_TAG
-    value: v0.3.0
+    value: v0.3.1
   # **本机镜像覆盖**（仅开发用）：留空 = 用 `${INGEST_SPC}/wist-ingest-ctrl:${INGEST_CTRL_TAG}`。
   # 本地 `cargo zigbuild` + `docker build` 出来的未发布镜像**没有 registry**，
   # 必须写在这里（如 `wist-ingest-ctrl:v0.2.0-local`），不要伪造成 `ghcr.io/...` ——
@@ -33,6 +33,10 @@ system:
     value: 0.0.0.0
   - name: INGEST_PORT
     value: 6514
+  # 交给网关的入口主机名（`[ctrl.link] advertise` 的 host 部分；端口取 INGEST_PORT）。
+  # 留空 = 由 INGEST_BIND_IP 推导（0.0.0.0 推导出来的地址对端连不上，管理台会提示）。
+  - name: INGEST_ADVERTISE_HOST
+    value: ''
 
   # 管理台只给内网/回环；ctrl 容器内监 19091，宿主只映射 127.0.0.1（web 走 compose 网络）
   - name: WEB_BIND_IP
@@ -47,8 +51,8 @@ system:
     value: localhost
 
   # 访问凭据（wist-cred 验证方）的收数 listener：cred 往这里推授权记录、探心跳。
-  # 与应用面分开（推送方证书由 CA-I 签）。默认只绑回环；cred 在别的机器时改成网卡地址，
-  # 并确认 `[ctrl.credentials]` 已指向接入脚本产的 cred.toml。
+  # 与应用面分开（推送方证书由 CA-I 签）。默认只绑回环；cred 在别的机器时改成网卡地址。
+  # 只在 `[ctrl.credentials]` 配了时才真正监听。
   - name: CRED_BIND_IP
     value: 127.0.0.1
   - name: CRED_PORT
