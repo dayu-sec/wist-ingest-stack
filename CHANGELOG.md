@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.3.0] - 2026-11-11
+
+### 新增（管理台域名入口 + 访问凭据接入 cred）
+
+- **管理台域名**：新增 `WEB_DOMAIN`（web 服务端证书 SAN 里的那个名字），访问地址变成
+  `https://<WEB_DOMAIN>:<WEB_PORT>/`。`WEB_BIND_IP` 产品默认仍是回环，要按域名/网卡访问在
+  `values` 里放开。`sys/scripts/gen-mtls-dev.sh` 支持 `WEB_DOMAIN` 与 `--scope data|mgmt|all`：
+  只换管理面时**不动**数据面 `ca-ingest`，已接入网关的客户端证书继续有效。
+- **访问凭据（wist-cred 验证方）**：ctrl 侧新增独立的 mTLS 收数 listener
+  `CRED_BIND_IP:CRED_PORT`（默认 `127.0.0.1:19092`）。材料落 `identity/ctrl/cred/`，
+  走已有的 `./identity:/identity:ro` 挂载，**不需要新增挂载点**；`sys/configs/ingest-ctrl/`
+  里带一段注释态的 `[ctrl.credentials]`。
+- `INGEST_CTRL_IMAGE`：本机镜像覆盖（开发态）。本地构建的镜像用普通名字，
+  不要伪造成 `ghcr.io/...` —— 那种 tag 一 `pull` 就是 `not found`。
+- `.env.example` 补齐 `WEB_DOMAIN` / `CRED_*` / `INGEST_CTRL_IMAGE`（CI 的 compose 渲染就用这份）。
+
+### 升级注意
+
+- 需要 **wist-ingest-ctrl ≥ 0.3.0**（旧版不认识 `[ctrl.credentials]`，也不认 `wcr_…` 令牌）。
+- `WEB_DOMAIN` 只决定证书 SAN：换域名要重签
+  `WEB_DOMAIN=<域名> bash sys/scripts/gen-mtls-dev.sh --scope mgmt`，再重启 ctrl + web。
+- 接 cred 剩下的活在 cred 侧：把 ingest 登记成验证方（audience = `wist-ingest`，收数地址指向
+  ctrl 的 19092 端口），跑接入命令把 `cred.toml` + 证书落到 `identity/ctrl/cred/`，
+  再把配置里那段取消注释——否则 ctrl 不会去监听收数端口。
+
 ## [0.2.0] - 2026-10-30
 
 ### 新增（对齐 wist-center 的控制面 link / gateway 的数据面配置页）
