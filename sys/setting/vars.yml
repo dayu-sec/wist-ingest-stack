@@ -20,7 +20,13 @@ system:
     value: v0.2.0
   # 控制面镜像（跑在 compose 的 ctrl 服务里，与 wist-center 同构）
   - name: INGEST_CTRL_TAG
-    value: v0.2.0
+    value: v0.3.0
+  # **本机镜像覆盖**（仅开发用）：留空 = 用 `${INGEST_SPC}/wist-ingest-ctrl:${INGEST_CTRL_TAG}`。
+  # 本地 `cargo zigbuild` + `docker build` 出来的未发布镜像**没有 registry**，
+  # 必须写在这里（如 `wist-ingest-ctrl:v0.2.0-local`），不要伪造成 `ghcr.io/...` ——
+  # 那种 tag 只要 compose 尝试 pull（或换一台机器）就是 `not found`。
+  - name: INGEST_CTRL_IMAGE
+    value: ''
 
   # 数据面入口：这是互联网链路，默认发布到 0.0.0.0:6514
   - name: INGEST_BIND_IP
@@ -33,6 +39,20 @@ system:
     value: 127.0.0.1
   - name: WEB_PORT
     value: 18080
+  # 管理台对外域名：**只决定证书 SAN 带哪个名字**，访问地址是
+  # `https://<WEB_DOMAIN>:<WEB_PORT>/`。nginx 的 server_name 是镜像里烤好的 `_`（任意 Host 都收），
+  # 所以换域名不需要重发 web 镜像；但证书 SAN 不含该域名时浏览器会报名字不符。
+  # 生成/重签：`WEB_DOMAIN=<域名> bash sys/scripts/gen-mtls-dev.sh --scope mgmt`
+  - name: WEB_DOMAIN
+    value: localhost
+
+  # 访问凭据（wist-cred 验证方）的收数 listener：cred 往这里推授权记录、探心跳。
+  # 与应用面分开（推送方证书由 CA-I 签）。默认只绑回环；cred 在别的机器时改成网卡地址，
+  # 并确认 `[ctrl.credentials]` 已指向接入脚本产的 cred.toml。
+  - name: CRED_BIND_IP
+    value: 127.0.0.1
+  - name: CRED_PORT
+    value: 19092
 
   - name: TZ
     value: Asia/Shanghai

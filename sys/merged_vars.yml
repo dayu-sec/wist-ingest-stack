@@ -8,7 +8,9 @@ system:
 - name: INGEST_WEB_TAG
   value: v0.2.0
 - name: INGEST_CTRL_TAG
-  value: v0.2.0
+  value: v0.3.0
+- name: INGEST_CTRL_IMAGE
+  value: ''
 - name: INGEST_BIND_IP
   value: 0.0.0.0
 - name: INGEST_PORT
@@ -17,5 +19,11 @@ system:
   value: 127.0.0.1
 - name: WEB_PORT
   value: 18080
+- name: WEB_DOMAIN
+  value: localhost
+- name: CRED_BIND_IP
+  value: 127.0.0.1
+- name: CRED_PORT
+  value: 19092
 - name: TZ
   value: Asia/Shanghai

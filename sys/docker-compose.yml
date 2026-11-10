@@ -7,7 +7,8 @@
 #
 # 端口（宿主:容器）：
 #   ${INGEST_BIND_IP}:${INGEST_PORT}:6514   互联网入口（网关 → ingest）
-#   ${WEB_BIND_IP}:${WEB_PORT}:80           管理台，默认只绑回环
+#   ${WEB_BIND_IP}:${WEB_PORT}:443           管理台，默认只绑回环
+#   ${CRED_BIND_IP}:${CRED_PORT}:19092       访问凭据收数（cred → ctrl），只在配了 [ctrl.credentials] 时真正监听
 #
 # 运行身份：上游镜像 `USER wparse`（名字而非数字），这里显式钉 999:999。
 # 宿主 bind 在 Linux 上不改属主，所以宿主侧必须 `gops sys perms` 对齐：
@@ -50,7 +51,8 @@ services:
   # 读 socket 需要能访问 docker 组的身份，这里直接用容器内 root（socket 等价宿主 root，如实标记）。
   ctrl:
     container_name: wist-ingest-stack-ctrl
-    image: ${INGEST_SPC}/wist-ingest-ctrl:${INGEST_CTRL_TAG}
+    # 默认从 registry 拉；`INGEST_CTRL_IMAGE` 非空时直接用本机镜像（开发态，见 vars.yml）。
+    image: ${INGEST_CTRL_IMAGE:-${INGEST_SPC}/wist-ingest-ctrl:${INGEST_CTRL_TAG}}
     restart: unless-stopped
     user: "0:0"
     # 镜像 ENTRYPOINT=[wist-ingest-ctrl] CMD=[--help]，不写 command 会打印帮助后退出。
@@ -63,6 +65,10 @@ services:
     ports:
       # 仅供宿主调试（curl / 命令行）；web 走 compose 网络直连 ctrl:19091。
       - "127.0.0.1:19091:19091"
+      # 访问凭据（wist-cred 验证方）的收数 listener：cred 往这里推 register/revoke 并探心跳。
+      # 只在 `[ctrl.credentials]` 配了时才真正监听（不配则端口空着）。
+      # 默认只绑回环；cred 在别的机器时把 CRED_BIND_IP 改成网卡地址（应用层仍只认 CA-I 客户端证书）。
+      - "${CRED_BIND_IP}:${CRED_PORT}:19092"
     volumes:
       # 现场渲染出的站点配置（来自 sys/configs/ingest-ctrl/，只补缺）
       - ./configs/ingest-ctrl:/configs:ro
@@ -71,6 +77,8 @@ services:
       # 数据面运行根：ctrl 往这里渲染 connectors/ + topology/，与 ingest 的 /data 是同一份
       - ./data-plane-run/work:/work
       # 站点身份（证书指纹 / 到期检查；管理面 TLS 的 server 证书）
+      # 接 cred 时，接入命令把材料落在 `identity/ctrl/cred/`，`[ctrl.credentials] file` 就指
+      # `/identity/ctrl/cred/cred.toml` —— 不用再加挂载点。
       - ./identity:/identity:ro
       - /var/run/docker.sock:/var/run/docker.sock
     security_opt:

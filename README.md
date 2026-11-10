@@ -17,7 +17,8 @@ sys/
   setting/vars.yml       产品默认变量
   configs/ingest-ctrl/ingest-ctrl.toml  ctrl 站点配置（容器内路径 + ${SEC_*} 占位）
   scripts/init-ingest.sh 备料：运行根 + 种子 + 复制 ctrl 配置
-values/value.yml         现场覆盖
+values/value.yml         现场覆盖（**脱离运维项目单独部署时**生效；在 ops-prj 里则以
+                        `<ops-prj>/values/wist-ingest-stack/sys_value.yml` 为准）
 identity/ingest/         站点身份（server cert/key + client CA）—— 站点态，不进包
 configs/ingest-ctrl/     ctrl 渲染后的站点配置（现场态，不入库、不进包）
 data-plane-run/work/     容器 /data 的宿主侧工作根 —— 站点态
@@ -40,12 +41,14 @@ bash sys/scripts/init-ingest.sh
 
 # 3) 放站点身份（三棵目录）
 #    开发：
-#      bash sys/scripts/gen-mtls-dev.sh
+#      WEB_DOMAIN=<管理台域名> bash sys/scripts/gen-mtls-dev.sh      # 默认全部重生成
+#      WEB_DOMAIN=<管理台域名> bash sys/scripts/gen-mtls-dev.sh --scope mgmt  # 只换管理面（不动网关信任锚）
 #    生产：由 Center / 离线 CA 签发同名文件
 #      identity/ingest/trust/  server.pem server.key client-ca.pem      数据面（网关 → ingest）
 #      identity/ctrl/tls/      ctrl.pem ctrl.key web-client-ca.pem      管理面（ctrl 服务端）
 #      identity/web/tls/       web.pem web.key web-client.pem web-client.key ctrl-ca.pem
 #    私钥一律 0640、属组 999。
+#    `WEB_DOMAIN` 只影响 web 服务端证书的 SAN（访问域名）；不设只带 localhost / 127.0.0.1。
 gops sys perms --check
 gops sys perms --apply
 
@@ -56,7 +59,12 @@ gops run start
 # 5) 登录管理台
 #    admin token 在密钥文件里（配置里只有 ${SEC_INGEST_CTRL_ADMIN_TOKEN} 占位）：
 gops sec get ingest_ctrl_admin_token      # 复制输出的值
-#    浏览器打开 https://127.0.0.1:18080 （自签证书告警点继续），粘进去即可。
+#    浏览器打开 https://<WEB_DOMAIN>:<WEB_PORT>/ （自签证书告警点继续），粘进去即可。
+#    默认入口是 `https://ingest-web.dev.wist.lab:18080/`：域名必须能解析到本机
+#    （DNS 或 /etc/hosts，如 `192.168.1.128  ingest-web.dev.wist.lab`），且证书 SAN 含该域名。
+#    回环 `https://127.0.0.1:18080/` 仍可用（证书固定带 localhost / 127.0.0.1）。
+#    ⚠ 只用 **https**：宿主只发布了 443，用 http 请求会得到
+#      `400 The plain HTTP request was sent to HTTPS port`（不是 301）。
 #    // 想看只读账号：往 .wist/sec-value.yml 加 ingest_ctrl_viewer_token，
 #    // 并取消 configs/ingest-ctrl/ingest-ctrl.toml 里 viewer_token 那行注释，重启 ctrl 容器。
 
@@ -85,6 +93,69 @@ gops sec get ingest_ctrl_admin_token      # 复制输出的值
 **强制点仍是 mTLS**：券只负责「谁被授权接入、用哪张证书」，真正的放行由 `tcp` source 的
 `client_ca` 校验完成。上游不把 peer cert 写进记录，所以租户 tag 仍来自 source 的静态 tags，
 不能按连接区分（见「已知边界」）。
+
+## 访问凭据（wist-cred 的验证方 X）
+
+`ctrl` 内置了 **`wist-cred-peer`** 运行时（与 `wist-center` / `wist-field-api` 同一份契约），
+接上后有两件事同时生效：
+
+- **收数**：`CRED_PORT`（默认 19092）上收 cred 推来的授权记录（mTLS，客户端证书由 CA-I 签，
+  应用层再做签发方白名单），摘要表落 `data-plane-run/work/.ctrl/credentials.json`（只存 sha256）；
+- **验 token**：管理面除 `ingest_ctrl_admin_token` / `viewer` 外，也认 cred 签发的 `wcr_…`——
+  角色命中 `admin_roles`（默认 `admin`）给 admin，其余给 viewer。
+
+材料与策略全在接入脚本产出的 `cred.toml` 里（identity / audience / 签发方 / 角色），
+栈这边**只负责把它挂进去**（`./identity` 已挂到 `/identity:ro`，材料落 `identity/ctrl/cred/`）。
+
+```bash
+# 1) 在 cred 侧把本服务登记成验证方（audience 必须叫 wist-ingest），拿到接入命令；
+#    跑完后材料落在 identity/ctrl/cred/：server.crt server.key client-ca.pem cred.toml
+
+# 2) 打开 ctrl 的配置（`configs/ingest-ctrl/ingest-ctrl.toml` 里那段是现成的，取消注释即可）：
+[ctrl.credentials]
+file = "/identity/ctrl/cred/cred.toml"
+listen = "0.0.0.0:19092"
+admin_roles = ["admin"]
+
+# 3) 让 cred 能连到收数 listener（默认只绑回环）：
+#    values 里把 CRED_BIND_IP 改成网卡地址 → `gops sys localize` → `gops run start`
+
+# 4) 重启 ctrl，看启动日志与状态：
+docker restart wist-ingest-stack-ctrl
+gops sec get ingest_ctrl_admin_token >/dev/null   # 取静态 token 仍可用
+#    https://<WEB_DOMAIN>:<WEB_PORT>/ 登录时改用 cred 签发的 wcr_… 也可以
+```
+
+- **fail-fast**：配了 `[ctrl.credentials]` 但 `cred.toml` 读不到 / 角色词汇表为空 / 信任锚缺失 /
+  证书不对 → ctrl **拒绝启动**（不会出现“管理台能进但 cred 推不进来”的半启用）。
+- `GET /api/v1/status` 的 `credentials` 段能看 `registered`（当前能通过的凭据数）与 `rejected_on_load`。
+- 静态 token 与 cred 凭据**并存**：现场轮换期间两边都能登录。
+
+### 本地开发镜像（未发布）
+
+`ctrl` 默认取 `${INGEST_SPC}/wist-ingest-ctrl:${INGEST_CTRL_TAG}`。要跑一份**本机编译**的 ctrl：
+
+```bash
+cd ../../wist/wist-ingest-ctrl            # 源码仓
+cargo zigbuild --release --locked --target aarch64-unknown-linux-musl
+mkdir -p dist/arm64 && cp target/aarch64-unknown-linux-musl/release/wist-ingest-ctrl dist/arm64/
+cp version.txt dist/arm64/ && docker build -t wist-ingest-ctrl:v0.2.0-local .
+```
+
+然后在 `values/wist-ingest-stack/sys_value.yml` 写一行（`INGEST_CTRL_TAG` 保持产品默认）：
+
+```yaml
+INGEST_CTRL_IMAGE: wist-ingest-ctrl:v0.2.0-local
+```
+
+→ `gops sys localize` → `gops run start`。
+
+- **别**把它打成 `ghcr.io/...`：那个前缀的意思是“去 registry 拉”，本机镜像一旦换了 daemon、
+  被 prune、或在别的机器上 `up`，报的就是 `… not found`（真实踩过）。
+- 只能用 `gops run start`（= `docker compose up -d`，本地有镜像就不会拉）；
+  `docker compose pull` 对这种 tag **必然失败**。
+- 换机器就在那台机器上重跑上面三条命令（或 `docker save | docker load`）。
+- 发版后把 `INGEST_CTRL_IMAGE` 置空（或删掉），回到 registry 镜像。
 
 ## 配置与规则（只读）
 
